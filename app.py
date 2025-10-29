@@ -10,11 +10,11 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type"]}})
+CORS(app, origins=os.getenv('ALLOWED_ORIGINS', '*'))
 
 @app.route('/api/search', methods=['GET'])
 def search_complaints():
-    Şikayet Verileri
+    """Şikayet Verileri"""
     
     keyword = request.args.get('q', '')
     fetch_all = request.args.get('all', 'true').lower() == 'true'
@@ -561,8 +561,5 @@ def home():
     '''
 
 if __name__ == '__main__':
-    print("🚀 Şikayetvar Scraper API başlatılıyor...")
-    print("📍 API: http://localhost:8000")
-    print("🔍 Örnek: http://localhost:8000/api/search?q=trendyol")
-    print("\n" + "="*50)
-    app.run(debug=True, host='0.0.0.0', port=8000)
+    port = int(os.environ.get('PORT', 8000))
+    app.run(host='0.0.0.0', port=port, debug=False)
