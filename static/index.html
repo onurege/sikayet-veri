@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Şikayetvar Veri Çekici</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-6">
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800 mb-2">🔍 Şikayetvar Veri Çekici</h1>
+                    <p class="text-gray-600">Python Flask Backend ile gerçek veri çekme</p>
+                </div>
+                <div class="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-lg">
+                    <span class="text-sm font-medium text-gray-700">API Status:</span>
+                    <span id="api-status" class="text-yellow-600">Kontrol ediliyor...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Bağlantı Uyarısı -->
+        <div id="api-warning" class="bg-red-50 border-2 border-red-300 rounded-xl p-6 mb-6 hidden">
+            <div class="flex gap-3">
+                <span class="text-2xl">⚠️</span>
+                <div>
+                    <h3 class="font-bold text-red-900 text-lg mb-2">Backend API Çalışmıyor!</h3>
+                    <p class="text-red-800 mb-3">Flask sunucusunu başlatmanız gerekiyor:</p>
+                    <pre class="bg-gray-900 text-green-400 p-4 rounded-lg text-sm">python app.py</pre>
+                    <button onclick="checkAPI()" class="mt-3 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                        Bağlantıyı Tekrar Dene
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Box -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div class="flex gap-4 mb-4">
+                <input 
+                    type="text" 
+                    id="keyword-input"
+                    placeholder="Arama yapın (örn: trendyol, migros, kargo sorunu)"
+                    class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                    onkeypress="if(event.key==='Enter') searchComplaints()"
+                />
+                <button 
+                    onclick="searchComplaints()"
+                    id="search-btn"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-colors"
+                >
+                    🔍 Ara
+                </button>
+            </div>
+
+            <div class="flex gap-4 mb-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="search-type" value="company" checked class="w-4 h-4 text-blue-600">
+                    <span class="text-sm text-gray-700">🏢 Şirket Araması (örn: trendyol, migros)</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="search-type" value="keyword" class="w-4 h-4 text-blue-600">
+                    <span class="text-sm text-gray-700">🔍 Genel Arama (örn: kargo sorunu, bozuk ürün)</span>
+                </label>
+            </div>
+
+            <div class="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
+                <div class="flex gap-2">
+                    <span class="text-green-600 text-xl">✓</span>
+                    <div class="text-sm text-green-800">
+                        <strong>Artık gerçek veri çekiyoruz!</strong> Flask backend API ile sikayetvar.com'dan 
+                        direkt veri alıyoruz.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="hidden bg-white rounded-lg shadow-lg p-8 text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p class="text-gray-600 font-semibold text-lg mb-2">Veriler çekiliyor...</p>
+            <p id="loading-status" class="text-gray-500 text-sm"></p>
+            <div class="mt-4 bg-gray-200 rounded-full h-2 max-w-md mx-auto">
+                <div id="progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Error -->
+        <div id="error-box" class="hidden bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div class="flex gap-2">
+                <span class="text-red-600 text-xl">⚠️</span>
+                <p id="error-message" class="text-red-800"></p>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div id="results" class="hidden">
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white rounded-lg shadow p-4">
+                    <p class="text-gray-600 text-sm">Toplam Şikayet</p>
+                    <p class="text-2xl font-bold text-gray-800" id="total-count">0</p>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <p class="text-gray-600 text-sm">Çözülen</p>
+                    <p class="text-2xl font-bold text-green-600" id="resolved-count">0</p>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <p class="text-gray-600 text-sm">Cevaplanan</p>
+                    <p class="text-2xl font-bold text-yellow-600" id="answered-count">0</p>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <p class="text-gray-600 text-sm">Bekleyen</p>
+                    <p class="text-2xl font-bold text-red-600" id="pending-count">0</p>
+                </div>
+            </div>
+
+            <!-- Export Buttons -->
+            <div class="bg-white rounded-lg shadow-lg p-4 mb-6">
+                <div class="flex gap-4 flex-wrap">
+                    <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
+                        📊 Excel İndir
+                    </button>
+                    <button onclick="exportToJSON()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
+                        📄 JSON İndir
+                    </button>
+                    <button onclick="exportToCSV()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
+                        📁 CSV İndir
+                    </button>
+                    <button onclick="clearResults()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
+                        🗑️ Temizle
+                    </button>
+                </div>
+            </div>
+
+            <!-- Results Table -->
+            <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50 border-b">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Başlık</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Şirket</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durum</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Upvote</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tarih</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detay</th>
+                            </tr>
+                        </thead>
+                        <tbody id="results-table" class="bg-white divide-y divide-gray-200">
+                            <!-- Results will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // PRODUCTION READY CONFIGURATION
+        // API URL'i otomatik olarak current domain'i kullanır
+        // Localhost'ta: http://localhost:8000
+        // Production'da: https://yourapp.render.com
+        const API_BASE_URL = window.location.origin;
+        
+        let allComplaints = [];
+        let currentKeyword = '';
+
+        // API bağlantısını kontrol et
+        async function checkAPI() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/health`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('api-status').textContent = '✅ Çalışıyor';
+                    document.getElementById('api-status').className = 'text-green-600 font-semibold';
+                    document.getElementById('api-warning').classList.add('hidden');
+                    console.log('API Status:', data);
+                } else {
+                    throw new Error('API yanıt vermiyor');
+                }
+            } catch (error) {
+                console.error('API kontrol hatası:', error);
+                document.getElementById('api-status').textContent = '❌ Çalışmıyor';
+                document.getElementById('api-status').className = 'text-red-600 font-semibold';
+                
+                // Eğer localhost değilse farklı uyarı göster
+                if (!window.location.hostname.includes('localhost')) {
+                    document.getElementById('api-warning').querySelector('p').textContent = 'Backend servisi yanıt vermiyor. Lütfen daha sonra tekrar deneyin.';
+                    document.getElementById('api-warning').querySelector('pre').classList.add('hidden');
+                }
+                document.getElementById('api-warning').classList.remove('hidden');
+            }
+        }
+
+        // Şikayetleri ara
+        async function searchComplaints() {
+            const keyword = document.getElementById('keyword-input').value.trim();
+            const searchType = document.querySelector('input[name="search-type"]:checked').value;
+            
+            if (!keyword) {
+                alert('Lütfen bir arama kelimesi girin!');
+                return;
+            }
+
+            currentKeyword = keyword;
+
+            // UI güncelle
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('results').classList.add('hidden');
+            document.getElementById('error-box').classList.add('hidden');
+            document.getElementById('search-btn').disabled = true;
+
+            // Progress bar animasyonu
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress = Math.min(progress + Math.random() * 15, 90);
+                document.getElementById('progress-bar').style.width = progress + '%';
+            }, 500);
+
+            try {
+                const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(keyword)}&type=${searchType}&all=true`;
+                console.log('Fetching:', url);
+                
+                document.getElementById('loading-status').textContent = 'Veriler çekiliyor...';
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    // CORS için credentials ekle
+                    credentials: 'same-origin'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                clearInterval(progressInterval);
+                document.getElementById('progress-bar').style.width = '100%';
+
+                if (data.success && data.data) {
+                    allComplaints = data.data;
+                    displayResults(data.data);
+                    document.getElementById('loading-status').textContent = `${data.data.length} şikayet başarıyla yüklendi!`;
+                    
+                    // 1 saniye sonra loading'i gizle
+                    setTimeout(() => {
+                        document.getElementById('loading').classList.add('hidden');
+                        document.getElementById('results').classList.remove('hidden');
+                    }, 1000);
+                } else {
+                    throw new Error(data.error || 'Veri çekme başarısız');
+                }
+            } catch (error) {
+                clearInterval(progressInterval);
+                console.error('Arama hatası:', error);
+                
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('error-box').classList.remove('hidden');
+                document.getElementById('error-message').textContent = 
+                    error.message.includes('Failed to fetch') 
+                        ? 'Backend API\'ye bağlanılamıyor. Lütfen sunucunun çalıştığından emin olun.'
+                        : `Hata: ${error.message}`;
+            } finally {
+                document.getElementById('search-btn').disabled = false;
+                document.getElementById('progress-bar').style.width = '0%';
+            }
+        }
+
+        // Sonuçları göster
+        function displayResults(complaints) {
+            // İstatistikleri güncelle
+            document.getElementById('total-count').textContent = complaints.length;
+            
+            let resolved = 0, answered = 0, pending = 0;
+            complaints.forEach(c => {
+                if (c.status === 'Çözüldü') resolved++;
+                else if (c.status === 'Cevaplandı') answered++;
+                else pending++;
+            });
+            
+            document.getElementById('resolved-count').textContent = resolved;
+            document.getElementById('answered-count').textContent = answered;
+            document.getElementById('pending-count').textContent = pending;
+
+            // Tabloyu doldur
+            const tableBody = document.getElementById('results-table');
+            tableBody.innerHTML = '';
+
+            complaints.forEach((complaint, index) => {
+                const row = document.createElement('tr');
+                row.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                
+                // Status badge rengi
+                let statusBadge = '';
+                if (complaint.status === 'Çözüldü') {
+                    statusBadge = 'bg-green-100 text-green-800';
+                } else if (complaint.status === 'Cevaplandı') {
+                    statusBadge = 'bg-yellow-100 text-yellow-800';
+                } else {
+                    statusBadge = 'bg-red-100 text-red-800';
+                }
+
+                row.innerHTML = `
+                    <td class="px-4 py-3 text-sm">${index + 1}</td>
+                    <td class="px-4 py-3">
+                        <div class="text-sm font-medium text-gray-900 line-clamp-2">${complaint.title || 'Başlık yok'}</div>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${complaint.company || 'Bilinmiyor'}</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusBadge}">
+                            ${complaint.status || 'Beklemede'}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${complaint.upvotes || 0}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${complaint.date || '-'}</td>
+                    <td class="px-4 py-3 text-sm">
+                        <button onclick="showDetail(${index})" class="text-blue-600 hover:text-blue-900">
+                            Detay
+                        </button>
+                    </td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+        }
+
+        // Detay göster
+        function showDetail(index) {
+            const complaint = allComplaints[index];
+            const content = complaint.content || 'İçerik yok';
+            const link = complaint.link || '#';
+            
+            alert(`Başlık: ${complaint.title}\n\nİçerik: ${content.substring(0, 500)}...\n\nLink: ${link}`);
+        }
+
+        // Excel'e export
+        async function exportToExcel() {
+            if (allComplaints.length === 0) {
+                alert('Export edilecek veri yok!');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/export/excel`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        complaints: allComplaints,
+                        keyword: currentKeyword
+                    }),
+                    credentials: 'same-origin'
+                });
+
+                if (!response.ok) throw new Error('Excel export başarısız');
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `sikayetvar_${currentKeyword}_${new Date().toISOString().split('T')[0]}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (error) {
+                console.error('Excel export hatası:', error);
+                alert('Excel export başarısız: ' + error.message);
+            }
+        }
+
+        // JSON export
+        function exportToJSON() {
+            if (allComplaints.length === 0) {
+                alert('Export edilecek veri yok!');
+                return;
+            }
+
+            const dataStr = JSON.stringify(allComplaints, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            
+            const exportFileDefaultName = `sikayetvar_${currentKeyword}_${new Date().toISOString().split('T')[0]}.json`;
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        }
+
+        // CSV export
+        function exportToCSV() {
+            if (allComplaints.length === 0) {
+                alert('Export edilecek veri yok!');
+                return;
+            }
+
+            // CSV başlıkları
+            const headers = ['ID', 'Başlık', 'Şirket', 'Durum', 'Upvote', 'Tarih', 'İçerik', 'Link'];
+            
+            // CSV satırları
+            const rows = allComplaints.map((c, i) => [
+                i + 1,
+                `"${(c.title || '').replace(/"/g, '""')}"`,
+                `"${(c.company || '').replace(/"/g, '""')}"`,
+                c.status || '',
+                c.upvotes || 0,
+                c.date || '',
+                `"${(c.content || '').replace(/"/g, '""').substring(0, 500)}"`,
+                c.link || ''
+            ]);
+
+            // CSV string oluştur
+            let csvContent = '\uFEFF'; // UTF-8 BOM for Excel
+            csvContent += headers.join(',') + '\n';
+            csvContent += rows.map(e => e.join(',')).join('\n');
+
+            // İndir
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `sikayetvar_${currentKeyword}_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Sonuçları temizle
+        function clearResults() {
+            allComplaints = [];
+            currentKeyword = '';
+            document.getElementById('keyword-input').value = '';
+            document.getElementById('results').classList.add('hidden');
+            document.getElementById('results-table').innerHTML = '';
+        }
+
+        // Sayfa yüklendiğinde API'yi kontrol et
+        window.addEventListener('DOMContentLoaded', () => {
+            checkAPI();
+            
+            // Her 30 saniyede bir API durumunu kontrol et
+            setInterval(checkAPI, 30000);
+        });
+
+        // Enter tuşu ile arama
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('keyword-input').focus();
+        });
+    </script>
+</body>
+</html>

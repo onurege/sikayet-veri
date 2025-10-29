@@ -1,21 +1,74 @@
-from flask import Flask, request, jsonify, send_file
+"""
+Şikayetvar Scraper - Production Ready Version
+Flask backend with integrated frontend
+"""
+
+from flask import Flask, request, jsonify, send_file, render_template_string
 from flask_cors import CORS
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 import time
 import io
-import os
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+import os
+import json
+import logging
+
+# Logging configuration
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app, origins=os.getenv('ALLOWED_ORIGINS', '*'))
+
+# CORS configuration - production ready
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["http://localhost:*", "http://127.0.0.1:*"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
+
+# Ana sayfa - index.html'i serve et
+@app.route('/')
+def index():
+    """Ana sayfayı göster"""
+    try:
+        # Eğer static/index.html varsa onu kullan
+        if os.path.exists('static/index.html'):
+            with open('static/index.html', 'r', encoding='utf-8') as f:
+                return f.read()
+        # Yoksa templates/index.html'i kullan
+        elif os.path.exists('templates/index.html'):
+            with open('templates/index.html', 'r', encoding='utf-8') as f:
+                return f.read()
+        # Hiçbiri yoksa basit bir sayfa göster
+        else:
+            return '''
+            <html>
+                <head><title>Şikayetvar Scraper</title></head>
+                <body>
+                    <h1>Şikayetvar Scraper API</h1>
+                    <p>Frontend dosyası bulunamadı. Lütfen index.html dosyasını static/ veya templates/ klasörüne koyun.</p>
+                    <p>API Endpoints:</p>
+                    <ul>
+                        <li>/api/health - API durumu</li>
+                        <li>/api/search?q=keyword - Arama</li>
+                        <li>/api/export/excel - Excel export</li>
+                    </ul>
+                </body>
+            </html>
+            '''
+    except Exception as e:
+        logger.error(f"Index sayfası yüklenirken hata: {str(e)}")
+        return jsonify({'error': 'Sayfa yüklenemedi'}), 500
 
 @app.route('/api/search', methods=['GET'])
 def search_complaints():
-    """Şikayet Verileri"""
+    """Şikayetvar.com'dan veri çeker - TÜM SAYFALAR"""
     
     keyword = request.args.get('q', '')
     fetch_all = request.args.get('all', 'true').lower() == 'true'
@@ -99,7 +152,7 @@ def search_complaints():
                 print(f"⚠️ Sayfa {page}'de şikayet kartı bulunamadı (Arka arkaya boş: {consecutive_empty_pages})")
                 
                 if consecutive_empty_pages >= 2:
-                    print(f"✅ 2 sayfa üst üste boş, aramayı sonlandırılıyor")
+                    print(f"✅ 2 sayfa üst üste boş, aramayı sonlandırıyorum")
                     break
                 
                 page += 1
@@ -111,22 +164,11 @@ def search_complaints():
             
             print(f"✅ Sayfa {page}'de {len(complaint_cards)} kart bulundu")
             
-            # Debug için ilk 5 kartı kaydet
-            if page == 1 and len(all_complaints) == 0:
-                for i in range(min(5, len(complaint_cards))):
-                    with open(f'debug_card_{i+1}.html', 'w', encoding='utf-8') as f:
-                        f.write(str(complaint_cards[i].prettify()))
-                print(f"  📝 İlk {min(5, len(complaint_cards))} kart debug dosyalarına kaydedildi")
-            
             page_complaints = []
             failed_cards = 0
             
             for idx, card in enumerate(complaint_cards):
                 try:
-                    if idx < 5 and page == 1:
-                        card_id = card.get('data-id', 'unknown')
-                        print(f"    🔍 === KART #{idx+1} (ID: {card_id}) ===")
-                    
                     # BAŞLIK
                     title = None
                     link = ''
@@ -157,12 +199,6 @@ def search_complaints():
                         title = title_link.get_text(strip=True)
                         link = title_link.get('href', '')
                     
-                    if idx < 5 and page == 1:
-                        if title:
-                            print(f"       ✅ Başlık: '{title[:50]}'...")
-                        else:
-                            print(f"       ❌ Başlık bulunamadı")
-                    
                     if not title or len(title) < 5:
                         failed_cards += 1
                         continue
@@ -181,206 +217,110 @@ def search_complaints():
                     
                     # İÇERİK
                     content = ''
-                    
                     desc_elem = card.find('p', class_=lambda x: x and 'complaint-description' in str(x))
-                    
-                    if idx < 5 and page == 1:
-                        if desc_elem:
-                            print(f"       ✅ p.complaint-description bulundu")
-                        else:
-                            print(f"       ⚠️  p.complaint-description YOK")
-                    
                     if not desc_elem:
-                        desc_elem = card.find('a', class_=lambda x: x and 'complaint-description' in str(x))
-                        if idx < 5 and page == 1 and desc_elem:
-                            print(f"       ⚠️  a.complaint-description bulundu")
-                    
+                        desc_elem = card.find('div', class_=lambda x: x and 'complaint-description' in str(x))
                     if desc_elem:
                         content = desc_elem.get_text(strip=True)
-                        content = content.replace('...', '').strip()
-                        
-                        if idx < 5 and page == 1:
-                            print(f"       📝 İçerik: '{content[:80]}'...")
-                        
-                        if content.startswith('+') and len(content) <= 3:
-                            if idx < 5 and page == 1:
-                                print(f"       ❌ Görsel sayısı '{content}', atlanıyor")
-                            content = ''
-                        
-                        if content and len(content) < 20:
-                            if idx < 5 and page == 1:
-                                print(f"       ❌ Çok kısa ({len(content)} kar), atlanıyor")
-                            content = ''
-                    
-                    if not content:
-                        all_paragraphs = card.find_all('p')
-                        texts = []
-                        for p in all_paragraphs:
-                            p_text = p.get_text(strip=True)
-                            if p_text and len(p_text) > 20 and not p_text.startswith('+'):
-                                texts.append(p_text)
-                        if texts:
-                            content = ' '.join(texts)
-                    
-                    if not content:
-                        detail_elem = card.find('div', class_='complaint-detail')
-                        if detail_elem:
-                            content = detail_elem.get_text(strip=True)
-                    
-                    if content:
-                        content = ' '.join(content.split())
-                    else:
-                        if card.find('video') or card.find('div', class_='complaint-attachments'):
-                            content = '[Video/Fotoğraf şikayeti - metin yok]'
-                        else:
-                            content = ''
-                    
-                    # UPVOTE
-                    upvotes = 0
-                    upvote_attr = card.get('data-upvoter-count', '0')
-                    try:
-                        upvotes = int(upvote_attr)
-                    except:
-                        pass
-                    
-                    complaint_id = card.get('data-id', '')
                     
                     # DURUM
                     status = 'Beklemede'
-                    solved_badge = card.find('div', class_='solved-badge')
-                    if solved_badge:
-                        badge_text = solved_badge.get_text(strip=True).lower()
-                        if 'çözüldü' in badge_text:
+                    status_elem = card.find('span', class_=lambda x: x and 'status' in str(x))
+                    if status_elem:
+                        status_text = status_elem.get_text(strip=True).lower()
+                        if 'çözüldü' in status_text:
                             status = 'Çözüldü'
-                        else:
-                            status = solved_badge.get_text(strip=True)
-                    else:
-                        status_elem = card.find('div', class_=lambda x: x and 'status' in str(x).lower())
-                        if status_elem:
-                            status_text = status_elem.get_text(strip=True).lower()
-                            if 'çözüldü' in status_text or 'çözüldi' in status_text:
-                                status = 'Çözüldü'
-                            elif 'cevaplandı' in status_text:
-                                status = 'Cevaplandı'
+                        elif 'cevap' in status_text:
+                            status = 'Cevaplandı'
+                    
+                    # UPVOTES
+                    upvotes = 0
+                    upvote_elem = card.find('span', class_=lambda x: x and ('upvote' in str(x) or 'vote' in str(x) or 'like' in str(x)))
+                    if upvote_elem:
+                        try:
+                            upvotes = int(''.join(filter(str.isdigit, upvote_elem.get_text())))
+                        except:
+                            pass
                     
                     # TARİH
                     date = ''
-                    date_elem = (
-                        card.find('time') or
-                        card.find('span', class_=lambda x: x and 'date' in str(x).lower()) or
-                        card.find('div', class_=lambda x: x and 'date' in str(x).lower())
-                    )
+                    date_elem = card.find('time') or card.find('span', class_=lambda x: x and 'date' in str(x))
                     if date_elem:
                         date = date_elem.get_text(strip=True)
                     
-                    page_complaints.append({
-                        'id': len(all_complaints) + len(page_complaints) + 1,
+                    # ŞİKAYET ID
+                    complaint_id = card.get('data-id', '') or card.get('id', '')
+                    
+                    # Veriyi ekle
+                    complaint_data = {
+                        'id': len(all_complaints) + idx + 1,
                         'complaint_id': complaint_id,
                         'title': title,
-                        'content': content,
                         'company': company,
-                        'date': date,
-                        'link': link,
-                        'upvotes': upvotes,
+                        'content': content,
                         'status': status,
-                        'page': page
-                    })
+                        'upvotes': upvotes,
+                        'date': date,
+                        'link': link
+                    }
+                    
+                    page_complaints.append(complaint_data)
                     
                 except Exception as e:
                     failed_cards += 1
-                    if page <= 2 and failed_cards <= 3:
-                        print(f"  ✗ Kart #{idx+1} parse hatası: {e}")
+                    print(f"       ❌ Kart #{idx+1} parse hatası: {str(e)[:100]}")
                     continue
             
             if failed_cards > 0:
-                print(f"  ⚠️  Toplam {failed_cards}/{len(complaint_cards)} kart parse edilemedi")
-                print(f"  ✅ Başarıyla parse edilen: {len(page_complaints)} şikayet")
+                print(f"  ⚠️ {failed_cards} kart parse edilemedi")
             
-            all_complaints.extend(page_complaints)
-            
-            if len(page_complaints) == 0 and len(complaint_cards) > 0:
-                consecutive_empty_pages += 1
-                print(f"⚠️  {len(complaint_cards)} kart bulundu ama hiçbiri parse edilemedi (Arka arkaya: {consecutive_empty_pages})")
-                
-                if consecutive_empty_pages >= 2:
-                    print(f"✅ 2 sayfa üst üste veri parse edilemedi, aramayı sonlandırıyorum")
-                    break
-            elif len(page_complaints) > 0:
-                consecutive_empty_pages = 0
-                print(f"📊 Toplam çekilen: {len(all_complaints)} şikayet")
+            if page_complaints:
+                all_complaints.extend(page_complaints)
+                print(f"  ✅ {len(page_complaints)} şikayet eklendi (Toplam: {len(all_complaints)})")
             
             if not fetch_all:
+                print("  📌 Tek sayfa modu, durduruldu")
                 break
             
-            if page == 1 and not total_pages_found:
-                pagination = soup.find('ul', class_='pagination-list')
-                if pagination:
-                    all_page_items = pagination.find_all('li')
-                    max_page_num = 0
-                    
-                    for item in all_page_items:
-                        title = item.get('title', '')
-                        if '/' in title:
-                            parts = title.split('/')
-                            if len(parts) >= 2:
-                                try:
-                                    page_total = parts[1].split('-')[0].strip()
-                                    page_num = int(page_total)
-                                    if page_num > max_page_num:
-                                        max_page_num = page_num
-                                except:
-                                    pass
-                        
-                        href = item.get('href', '')
-                        if 'page=' in href or 'sayfa=' in href:
-                            try:
-                                if 'page=' in href:
-                                    page_num = int(href.split('page=')[1].split('&')[0])
-                                else:
-                                    page_num = int(href.split('sayfa=')[1].split('&')[0])
-                                if page_num > max_page_num:
-                                    max_page_num = page_num
-                            except:
-                                pass
-                    
-                    if max_page_num > 0:
-                        max_pages = min(max_page_num, 100)
-                        total_pages_found = True
-                        print(f"📄 Toplam {max_page_num} sayfa tespit edildi (işlenecek: {max_pages})")
-                    else:
-                        print(f"⚠️  Pagination var ama sayfa sayısı tespit edilemedi, devam ediliyor...")
-                else:
-                    print(f"📄 Pagination elementi yok (tek sayfa olabilir, arka arkaya boş sayfa kontrolüyle devam)")
-            
-            if total_pages_found and page >= max_pages:
-                print(f"✅ Toplam {max_pages} sayfa çekildi")
+            if page >= 10 and len(all_complaints) > 200:
+                print(f"✅ Yeterli veri toplandı ({len(all_complaints)} şikayet), durduruldu")
                 break
             
             page += 1
             
+            # Rate limiting
             import random
-            wait_time = random.uniform(2, 4)
+            wait_time = random.uniform(1, 3)
             print(f"⏳ {wait_time:.1f} saniye bekleniyor...")
             time.sleep(wait_time)
         
-        print(f"\n✅ Toplam {len(all_complaints)} şikayet {page} sayfadan çekildi\n")
+        # Başarılı sonuç
+        print(f"\n✅ TAMAMLANDI: Toplam {len(all_complaints)} şikayet çekildi")
         
         return jsonify({
             'success': True,
+            'data': all_complaints,
+            'total': len(all_complaints),
             'keyword': keyword,
-            'count': len(all_complaints),
-            'pages': page,
-            'complaints': all_complaints,
-            'scraped_at': datetime.now().isoformat()
+            'pages_scraped': page - 1,
+            'timestamp': datetime.now().isoformat()
         })
         
-    except requests.RequestException as e:
+    except requests.exceptions.RequestException as e:
         error_msg = str(e)
         print(f"❌ İstek hatası: {error_msg}")
         
+        if 'ConnectTimeout' in error_msg or 'ConnectionError' in error_msg:
+            return jsonify({
+                'error': 'Bağlantı zaman aşımı. Lütfen tekrar deneyin.',
+                'success': False,
+                'partial_data': all_complaints if all_complaints else None,
+                'pages_scraped': page - 1
+            }), 504
+        
         if '429' in error_msg:
             return jsonify({
-                'error': 'Çok fazla istek! Sikayetvar.com geçici olarak engelledi. Lütfen birkaç dakika bekleyin.',
+                'error': 'Çok fazla istek. Lütfen biraz bekleyin.',
                 'success': False,
                 'partial_data': all_complaints if all_complaints else None,
                 'pages_scraped': page - 1
@@ -548,19 +488,33 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'message': 'Şikayetvar Scraper API çalışıyor',
-        'timestamp': datetime.now().isoformat()
+        'timestamp': datetime.now().isoformat(),
+        'environment': os.environ.get('FLASK_ENV', 'development'),
+        'version': '1.0.0'
     })
 
-@app.route('/')
-def home():
-    """Ana sayfa"""
-    return '''
-    <h1>Şikayetvar Scraper API</h1>
-    <p>Kullanım: <code>/api/search?q=ANAHTAR_KELIME</code></p>
-    <p>Örnek: <a href="/api/search?q=trendyol">/api/search?q=trendyol</a></p>
-    <p>Sağlık: <a href="/api/health">/api/health</a></p>
-    '''
+# Error handler
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({'error': 'Endpoint bulunamadı'}), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    return jsonify({'error': 'Sunucu hatası'}), 500
 
 if __name__ == '__main__':
+    # Port ayarı - environment variable veya default
     port = int(os.environ.get('PORT', 8000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    
+    # Debug modu - production'da False olmalı
+    debug = os.environ.get('FLASK_ENV') != 'production'
+    
+    print("="*50)
+    print("🚀 Şikayetvar Scraper API başlatılıyor...")
+    print(f"📍 URL: http://localhost:{port}")
+    print(f"🔍 Örnek: http://localhost:{port}/api/search?q=trendyol")
+    print(f"💻 Environment: {os.environ.get('FLASK_ENV', 'development')}")
+    print(f"🐛 Debug Mode: {debug}")
+    print("="*50)
+    
+    app.run(debug=debug, host='0.0.0.0', port=port)
