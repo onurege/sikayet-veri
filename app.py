@@ -113,17 +113,17 @@ def search_complaints():
             actual_url = final_url.rstrip('/')
             
             if actual_url != expected_url:
-                print(f"⚠️ Sayfa {page} farklı URL'ye yönlendirildi:")
+                print(f" Sayfa {page} farklı URL'ye yönlendirildi:")
                 print(f"   İstenilen: {expected_url}")
                 print(f"   Gelen: {actual_url}")
                 
                 if page > 1 and '/sikayetler' in actual_url and '?k=' in actual_url:
                     if 'sayfa=' not in actual_url and 'page=' not in actual_url:
-                        print(f"✅ Son sayfaya ulaşıldı (ilk sayfaya yönlendirildi)")
+                        print(f" Son sayfaya ulaşıldı (ilk sayfaya yönlendirildi)")
                         break
                 
                 if page > 1 and actual_url == f'https://www.sikayetvar.com/{keyword}':
-                    print(f"✅ Son sayfaya ulaşıldı (ana sayfaya yönlendirildi)")
+                    print(f" Son sayfaya ulaşıldı (ana sayfaya yönlendirildi)")
                     break
             
             if response.encoding is None or response.encoding == 'ISO-8859-1':
@@ -143,20 +143,20 @@ def search_complaints():
             
             if not complaint_cards:
                 consecutive_empty_pages += 1
-                print(f"⚠️ Sayfa {page}'de şikayet kartı bulunamadı (Arka arkaya boş: {consecutive_empty_pages})")
+                print(f" Sayfa {page}'de şikayet kartı bulunamadı (Arka arkaya boş: {consecutive_empty_pages})")
                 
                 if consecutive_empty_pages >= 2:
-                    print(f"✅ 2 sayfa üst üste boş, aramayı sonlandırlıyor")
+                    print(f" 2 sayfa üst üste boş, aramayı sonlandırlıyor")
                     break
                 
                 page += 1
                 import random
                 wait_time = random.uniform(2, 4)
-                print(f"⏳ {wait_time:.1f} saniye bekleniyor...")
+                print(f" {wait_time:.1f} saniye bekleniyor...")
                 time.sleep(wait_time)
                 continue
             
-            print(f"✅ Sayfa {page}'de {len(complaint_cards)} kart bulundu")
+            print(f" Sayfa {page}'de {len(complaint_cards)} kart bulundu")
             
             page_complaints = []
             failed_cards = 0
@@ -262,22 +262,22 @@ def search_complaints():
                     
                 except Exception as e:
                     failed_cards += 1
-                    print(f"       ❌ Kart #{idx+1} parse hatası: {str(e)[:100]}")
+                    print(f"        Kart #{idx+1} parse hatası: {str(e)[:100]}")
                     continue
             
             if failed_cards > 0:
-                print(f"  ⚠️ {failed_cards} kart parse edilemedi")
+                print(f"   {failed_cards} kart parse edilemedi")
             
             if page_complaints:
                 all_complaints.extend(page_complaints)
-                print(f"  ✅ {len(page_complaints)} şikayet eklendi (Toplam: {len(all_complaints)})")
+                print(f"   {len(page_complaints)} şikayet eklendi (Toplam: {len(all_complaints)})")
             
             if not fetch_all:
-                print("  📌 Tek sayfa modu, durduruldu")
+                print("   Tek sayfa modu, durduruldu")
                 break
             
             if page >= 10 and len(all_complaints) > 200:
-                print(f"✅ Yeterli veri toplandı ({len(all_complaints)} şikayet), durduruldu")
+                print(f" Yeterli veri toplandı ({len(all_complaints)} şikayet), durduruldu")
                 break
             
             page += 1
@@ -289,7 +289,7 @@ def search_complaints():
             time.sleep(wait_time)
         
         # Başarılı sonuç
-        print(f"\n✅ TAMAMLANDI: Toplam {len(all_complaints)} şikayet çekildi")
+        print(f"\n TAMAMLANDI: Toplam {len(all_complaints)} şikayet çekildi")
         
         return jsonify({
             'success': True,
@@ -302,7 +302,7 @@ def search_complaints():
         
     except requests.exceptions.RequestException as e:
         error_msg = str(e)
-        print(f"❌ İstek hatası: {error_msg}")
+        print(f" İstek hatası: {error_msg}")
         
         if 'ConnectTimeout' in error_msg or 'ConnectionError' in error_msg:
             return jsonify({
@@ -327,7 +327,7 @@ def search_complaints():
             'pages_scraped': page - 1
         }), 500
     except Exception as e:
-        print(f"❌ Beklenmeyen hata: {str(e)}")
+        print(f" Beklenmeyen hata: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({
@@ -471,7 +471,7 @@ def export_excel():
         )
         
     except Exception as e:
-        print(f"❌ Excel export hatası: {str(e)}")
+        print(f" Excel export hatası: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': f'Excel oluşturma hatası: {str(e)}'}), 500
@@ -500,15 +500,13 @@ if __name__ == '__main__':
     # Port ayarı - environment variable veya default
     port = int(os.environ.get('PORT', 8000))
     
-    # Debug modu - production'da False olmalı
+    # Debug modu - production'da False 
     debug = os.environ.get('FLASK_ENV') != 'production'
     
     print("="*50)
-    print("🚀 Şikayetvar Scraper API başlatılıyor...")
-    print(f"📍 URL: http://localhost:{port}")
-    print(f"🔍 Örnek: http://localhost:{port}/api/search?q=trendyol")
-    print(f"💻 Environment: {os.environ.get('FLASK_ENV', 'development')}")
-    print(f"🐛 Debug Mode: {debug}")
+    print("API start")
+    print(f" Environment: {os.environ.get('FLASK_ENV', 'development')}")
+    print(f" Debug Mode: {debug}")
     print("="*50)
     
     app.run(debug=debug, host='0.0.0.0', port=port)

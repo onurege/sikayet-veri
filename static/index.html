@@ -113,17 +113,15 @@
             <div class="bg-white rounded-lg shadow-lg p-4 mb-6">
                 <div class="flex gap-4 flex-wrap">
                     <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
-                        📊 Excel İndir
+                        Excel İndir
                     </button>
                     <button onclick="exportToJSON()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
-                        📄 JSON İndir
+                        JSON İndir
                     </button>
                     <button onclick="exportToCSV()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
-                        📁 CSV İndir
+                        CSV İndir
                     </button>
-                    <button onclick="clearResults()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
-                        🗑️ Temizle
-                    </button>
+                    
                 </div>
             </div>
 
@@ -428,14 +426,7 @@
             URL.revokeObjectURL(url);
         }
 
-        // Sonuçları temizle
-        function clearResults() {
-            allComplaints = [];
-            currentKeyword = '';
-            document.getElementById('keyword-input').value = '';
-            document.getElementById('results').classList.add('hidden');
-            document.getElementById('results-table').innerHTML = '';
-        }
+        
 
         // Sayfa yüklendiğinde API'yi kontrol et
         window.addEventListener('DOMContentLoaded', () => {
