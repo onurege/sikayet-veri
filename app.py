@@ -1,7 +1,3 @@
-"""
-Şikayetvar Scraper - Production Ready Version
-Flask backend with integrated frontend
-"""
 
 from flask import Flask, request, jsonify, send_file, render_template_string
 from flask_cors import CORS
@@ -50,9 +46,7 @@ def index():
             return '''
             <html>
                 <head><title>Şikayetvar Scraper</title></head>
-                <body>
-                    <h1>Şikayetvar Scraper API</h1>
-                    <p>Frontend dosyası bulunamadı. Lütfen index.html dosyasını static/ veya templates/ klasörüne koyun.</p>
+                <body>    
                     <p>API Endpoints:</p>
                     <ul>
                         <li>/api/health - API durumu</li>
@@ -152,7 +146,7 @@ def search_complaints():
                 print(f"⚠️ Sayfa {page}'de şikayet kartı bulunamadı (Arka arkaya boş: {consecutive_empty_pages})")
                 
                 if consecutive_empty_pages >= 2:
-                    print(f"✅ 2 sayfa üst üste boş, aramayı sonlandırıyorum")
+                    print(f"✅ 2 sayfa üst üste boş, aramayı sonlandırlıyor")
                     break
                 
                 page += 1
@@ -235,7 +229,7 @@ def search_complaints():
                     
                     # UPVOTES
                     upvotes = 0
-                    upvote_elem = card.find('span', class_=lambda x: x and ('upvote' in str(x) or 'vote' in str(x) or 'like' in str(x)))
+                    upvote_elem = card.find('span', class_=lambda x: x and 'rate-num' in str(x))
                     if upvote_elem:
                         try:
                             upvotes = int(''.join(filter(str.isdigit, upvote_elem.get_text())))
@@ -244,7 +238,7 @@ def search_complaints():
                     
                     # TARİH
                     date = ''
-                    date_elem = card.find('time') or card.find('span', class_=lambda x: x and 'date' in str(x))
+                    date_elem = card.find('time') or card.find('span', class_=lambda x: x and 'js-tooltip time tooltipstered' in str(x))
                     if date_elem:
                         date = date_elem.get_text(strip=True)
                     

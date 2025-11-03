@@ -67,16 +67,7 @@
                 </label>
             </div>
 
-            <div class="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
-                <div class="flex gap-2">
-                    <span class="text-green-600 text-xl">✓</span>
-                    <div class="text-sm text-green-800">
-                        <strong>Artık gerçek veri çekiyoruz!</strong> Flask backend API ile sikayetvar.com'dan 
-                        direkt veri alıyoruz.
-                    </div>
-                </div>
-            </div>
-        </div>
+           
 
         <!-- Loading -->
         <div id="loading" class="hidden bg-white rounded-lg shadow-lg p-8 text-center">
@@ -161,10 +152,6 @@
     </div>
 
     <script>
-        // PRODUCTION READY CONFIGURATION
-        // API URL'i otomatik olarak current domain'i kullanır
-        // Localhost'ta: http://localhost:8000
-        // Production'da: https://yourapp.render.com
         const API_BASE_URL = window.location.origin;
         
         let allComplaints = [];
@@ -196,7 +183,7 @@
                 
                 // Eğer localhost değilse farklı uyarı göster
                 if (!window.location.hostname.includes('localhost')) {
-                    document.getElementById('api-warning').querySelector('p').textContent = 'Backend servisi yanıt vermiyor. Lütfen daha sonra tekrar deneyin.';
+                    document.getElementById('api-warning').querySelector('p').textContent = 'Backend servisi yanıt vermiyor.';
                     document.getElementById('api-warning').querySelector('pre').classList.add('hidden');
                 }
                 document.getElementById('api-warning').classList.remove('hidden');
@@ -274,7 +261,7 @@
                 document.getElementById('error-box').classList.remove('hidden');
                 document.getElementById('error-message').textContent = 
                     error.message.includes('Failed to fetch') 
-                        ? 'Backend API\'ye bağlanılamıyor. Lütfen sunucunun çalıştığından emin olun.'
+                        ? 'Backend API\'ye bağlanılamıyor.'
                         : `Hata: ${error.message}`;
             } finally {
                 document.getElementById('search-btn').disabled = false;
