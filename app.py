@@ -236,11 +236,53 @@ def search_complaints():
                         except:
                             pass
                     
-                    # TARİH
+                    # TARİH - Geliştirilmiş
                     date = ''
-                    date_elem = card.find('time') or card.find('span', class_=lambda x: x and 'js-tooltip time tooltipstered' in str(x))
+                    # 1. Deneme: time etiketi
+                    date_elem = card.find('time')
                     if date_elem:
                         date = date_elem.get_text(strip=True)
+                        if not date:
+                            date = date_elem.get('title', '')
+                            
+                    # 2. Deneme: span içinde time class'ı
+                    if not date:
+                        date_elem = card.find('span', class_=lambda x: x and 'time' in str(x))
+                        if date_elem:
+                            date = date_elem.get_text(strip=True)
+                            if not date:
+                                date = date_elem.get('title', '')
+                                
+                    # 3. Deneme: div içinde time class'ı (Kullanıcı bildirimi: <div class="js-tooltip time tooltipstered">)
+                    if not date:
+                        date_elem = card.find('div', class_=lambda x: x and 'time' in str(x))
+                        if date_elem:
+                            date = date_elem.get_text(strip=True)
+                            
+                    # Tarih temizliği (Örn: "03 Eylül 2024 04:28400" -> "03 Eylül 2024 04:28")
+                    if date:
+                        # Genellikle tarih formatı "DD Ay YYYY HH:MM" şeklindedir
+                        # Sondaki fazla rakamları kırpalım (muhtemelen view count vs karışıyor)
+                        import re
+                        # Sadece tarih ve saat formatını almaya çalışalım
+                        # Örn: 03 Eylül 2024 09:00
+                        match = re.search(r'(\d{1,2}\s+[a-zA-ZçÇğĞıİöÖşŞüÜ]+\s+\d{4}\s+\d{2}:\d{2})', date)
+                        if match:
+                            date = match.group(1)
+                        else:
+                            # Yıl yoksa (Örn: 04 Ağustos 14:02) -> Bu yılın tarihidir
+                            # Grubu parçalayalım: (04 Ağustos) (14:02)
+                            match_short = re.search(r'(\d{1,2}\s+[a-zA-ZçÇğĞıİöÖşŞüÜ]+)\s+(\d{2}:\d{2})', date)
+                            if match_short:
+                                current_year = datetime.now().year
+                                # Araya yılı ekle: "04 Ağustos" + " 2025 " + "14:02"
+                                date = f"{match_short.group(1)} {current_year} {match_short.group(2)}"
+
+                    # 4. Deneme: kartın sağ üstündeki herhangi bir metadata
+                    if not date:
+                        meta_elem = card.find('div', class_='complaint-layer')
+                        if meta_elem:
+                             pass
                     
                     # ŞİKAYET ID
                     complaint_id = card.get('data-id', '') or card.get('id', '')
@@ -475,6 +517,123 @@ def export_excel():
         import traceback
         traceback.print_exc()
         return jsonify({'error': f'Excel oluşturma hatası: {str(e)}'}), 500
+
+        return jsonify({'error': 'Sunucu hatası'}), 500
+
+# AI Configuration
+import google.generativeai as genai
+import os
+
+# Manual .env loader (Basit .env okuyucu)
+try:
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key.strip()] = value.strip()
+        print(" .env dosyası başarıyla yüklendi.")
+except Exception as e:
+    print(f" .env yüklenirken hata: {e}")
+
+
+@app.route('/api/analyze', methods=['POST'])
+def analyze_complaints():
+    """Gemini AI ile şikayetleri analiz et"""
+    try:
+        api_key = os.environ.get('GEMINI_API_KEY')
+        if not api_key:
+            return jsonify({
+                'success': False, 
+                'error': 'API Anahtarı bulunamadı. Lütfen GEMINI_API_KEY çevre değişkenini tanımlayın.'
+            }), 400
+
+        data = request.json
+        complaints = data.get('complaints', [])
+        
+        if not complaints:
+            return jsonify({'success': False, 'error': 'Analiz edilecek veri yok.'}), 400
+
+        # Veriyi özetle (Token limitine takılmamak için sadece başlıkları ve kısa içerikleri alalım)
+        # Son 50 şikayeti veya random örnekleri alabiliriz, şimdilik ilk 30 tanesini alalım detaylı analiz için.
+        summary_text = "Müşteri Şikayetleri Listesi:\n"
+        for idx, c in enumerate(complaints[:30]):
+            summary_text += f"{idx+1}. Başlık: {c.get('title', '')} - Kurum: {c.get('company', '')} - İçerik: {c.get('content', '')[:100]}...\n"
+
+        prompt = f"""
+        Sen profesyonel bir veri analistisin. Aşağıdaki müşteri şikayetleri listesini analiz ederek Türkçe bir yönetici özeti çıkar. Rapora başlarken direkt olarak içerik vererek başla herhangi bir giriş cümlesi verme.
+        
+        Aşağıdaki formatta bir rapor sun:
+        
+        ##  Genel Duygu ve Durum
+        (Kısa bir paragraf ile genel müşteri memnuniyetsizliği seviyesini ve tonunu özetle.)
+
+        ##  Kök Nedenler
+        (kaç tane şikayet gelmiş ve konu kirilimlari kategorileri kaçar tane, Bu konu Kirilimlarina göre özet bilgi ver, ve bu konu Kirilimlarina göre kök neden önerileri cikar)
+
+        ## Analiz ve Aksiyon Önerileri
+        (kök neden analizini ve aksiyon planını çalışmış oldukları dağıtım ve ERP sistemi ve depo yönetimi olarak hangi nedenlerde olduğunu analiz ederek yaz ve ona göre öneriler sun)
+      
+        ##  Öne Çıkan 3 Temel Sorun
+        1. **[Sorun Başlığı]**: [Açıklama]
+        2. **[Sorun Başlığı]**: [Açıklama]
+        3. **[Sorun Başlığı]**: [Açıklama]
+
+        ##  Aksiyon Önerileri
+        * [Öneri 1]
+        * [Öneri 2]
+        * [Öneri 3]
+
+        VERİLER:
+        {summary_text}
+        """
+
+        genai.configure(api_key=api_key)
+        
+        # Model seçimi (Dinamik)
+        target_model = 'gemini-pro' # Varsayılan
+        try:
+            # Kullanılabilir modelleri listele
+            available_models = []
+            for m in genai.list_models():
+                if 'generateContent' in m.supported_generation_methods:
+                    available_models.append(m.name)
+            
+            print(f"Kullanılabilir modeller: {available_models}")
+            
+            # Öncelik sırası: Flash > Pro > Diğerleri
+            flash_model = next((m for m in available_models if 'flash' in m), None)
+            pro_model = next((m for m in available_models if 'pro' in m and 'vision' not in m), None)
+            
+            if flash_model:
+                target_model = flash_model
+            elif pro_model:
+                target_model = pro_model
+            elif available_models:
+                target_model = available_models[0]
+                
+            print(f"Seçilen model: {target_model}")
+            
+        except Exception as e:
+            print(f"Model listeleme hatası: {e}, varsayılan kullanılıyor.")
+
+        model = genai.GenerativeModel(target_model)
+        
+        response = model.generate_content(prompt)
+        
+        return jsonify({
+            'success': True,
+            'analysis': response.text
+        })
+
+    except Exception as e:
+        logger.error(f"AI Analiz Hatası: {str(e)}")
+        return jsonify({
+            'success': False, 
+            'error': f'AI Analizi sırasında hata oluştu: {str(e)}'
+        }), 500
 
 @app.route('/api/health', methods=['GET'])
 def health_check():

@@ -3,144 +3,191 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Şikayetvar Veri Çekici</title>
+    <title>Kurumsal Şikayet Analiz Platformu</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Print Styles */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #print-area, #print-area * {
+                visibility: visible;
+            }
+            #print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 20px;
+            }
+            /* Ensure page breaks work nicely */
+            h2 { page-break-before: always; }
+            h2:first-of-type { page-break-before: auto; }
+            
+            /* Hide non-print elements explicitly */
+            #ai-modal, .fixed, header, #results, #loading, #error-box {
+                display: none !important;
+            }
+        }
+    </style>
 </head>
-<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-6">
-    <div class="max-w-6xl mx-auto">
+<body class="bg-slate-50 min-h-screen p-8 text-slate-800">
+    <!-- Hidden Print Area -->
+    <div id="print-area" class="hidden"></div>
+    <!-- ... Rest of body ... -->
+
+    <div class="max-w-7xl mx-auto">
         <!-- Header -->
-        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-            <div class="flex items-start justify-between">
+        <header class="bg-white rounded-xl shadow-sm border border-slate-200 p-8 mb-8">
+            <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-3xl font-bold text-gray-800 mb-2">🔍 Şikayetvar Veri Çekici</h1>
-                    <p class="text-gray-600">Python Flask Backend ile gerçek veri çekme</p>
+                    <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Kurumsal Şikayet Analiz Platformu</h1>
+                    <p class="text-slate-500 mt-2 text-lg">Pazar Analizi ve Müşteri Geri Bildirim Sistemi</p>
                 </div>
-                <div class="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-lg">
-                    <span class="text-sm font-medium text-gray-700">API Status:</span>
-                    <span id="api-status" class="text-yellow-600">Kontrol ediliyor...</span>
+                <div class="flex items-center gap-3 bg-slate-50 px-5 py-2.5 rounded-full border border-slate-200">
+                    <div id="api-status-dot" class="w-2.5 h-2.5 rounded-full bg-yellow-400"></div>
+                    <span id="api-status-text" class="text-sm font-medium text-slate-600">Sistem Bağlantısı Denetleniyor</span>
                 </div>
             </div>
-        </div>
+        </header>
 
-        <!-- API Bağlantı Uyarısı -->
-        <div id="api-warning" class="bg-red-50 border-2 border-red-300 rounded-xl p-6 mb-6 hidden">
-            <div class="flex gap-3">
-                <span class="text-2xl">⚠️</span>
+        <!-- System Alert -->
+        <div id="api-warning" class="bg-red-50 border border-red-200 rounded-lg p-6 mb-8 hidden">
+            <div class="flex items-start gap-4">
+                <div class="text-red-500">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                </div>
                 <div>
-                    <h3 class="font-bold text-red-900 text-lg mb-2">Backend API Çalışmıyor!</h3>
-                    <p class="text-red-800 mb-3">Flask sunucusunu başlatmanız gerekiyor:</p>
-                    <pre class="bg-gray-900 text-green-400 p-4 rounded-lg text-sm">python app.py</pre>
-                    <button onclick="checkAPI()" class="mt-3 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                        Bağlantıyı Tekrar Dene
+                    <h3 class="font-semibold text-red-900 text-lg">Veri Kaynağına Erişilemiyor</h3>
+                    <p class="text-red-700 mt-1">Analiz motoru (Backend servisi) ile bağlantı kurulamadı. Lütfen sistem yöneticinizle iletişime geçin veya servisin aktif olduğundan emin olun.</p>
+                    <button onclick="checkAPI()" class="mt-4 bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-md text-sm font-medium transition-colors">
+                        Bağlantıyı Yenile
                     </button>
                 </div>
             </div>
         </div>
 
-        <!-- Search Box -->
-        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-            <div class="flex gap-4 mb-4">
-                <input 
-                    type="text" 
-                    id="keyword-input"
-                    placeholder="Arama yapın (örn: trendyol, migros, kargo sorunu)"
-                    class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                    onkeypress="if(event.key==='Enter') searchComplaints()"
-                />
-                <button 
-                    onclick="searchComplaints()"
-                    id="search-btn"
-                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-colors"
-                >
-                    🔍 Ara
-                </button>
+        <!-- Search Section -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8 mb-8">
+            <div class="flex gap-4 mb-6">
+                <div class="flex-1">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Analiz Parametresi</label>
+                    <div class="relative">
+                        <input 
+                            type="text" 
+                            id="keyword-input"
+                            placeholder="Marka adı veya anahtar kelime giriniz..."
+                            class="w-full pl-4 pr-4 py-3.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder-slate-400"
+                            onkeypress="if(event.key==='Enter') searchComplaints()"
+                        />
+                    </div>
+                </div>
+                <div class="flex items-end">
+                    <button 
+                        onclick="searchComplaints()"
+                        id="search-btn"
+                        class="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3.5 rounded-lg font-medium flex items-center gap-2 transition-all shadow-md hover:shadow-lg h-[50px]"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        Analizi Başlat
+                    </button>
+                </div>
             </div>
 
-            <div class="flex gap-4 mb-4">
-                <label class="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="search-type" value="company" checked class="w-4 h-4 text-blue-600">
-                    <span class="text-sm text-gray-700">🏢 Şirket Araması (örn: trendyol, migros)</span>
-                </label>
-                <label class="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="search-type" value="keyword" class="w-4 h-4 text-blue-600">
-                    <span class="text-sm text-gray-700">🔍 Genel Arama (örn: kargo sorunu, bozuk ürün)</span>
-                </label>
-            </div>
-
-           
-
-        <!-- Loading -->
-        <div id="loading" class="hidden bg-white rounded-lg shadow-lg p-8 text-center">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p class="text-gray-600 font-semibold text-lg mb-2">Veriler çekiliyor...</p>
-            <p id="loading-status" class="text-gray-500 text-sm"></p>
-            <div class="mt-4 bg-gray-200 rounded-full h-2 max-w-md mx-auto">
-                <div id="progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
             </div>
         </div>
 
-        <!-- Error -->
-        <div id="error-box" class="hidden bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <div class="flex gap-2">
-                <span class="text-red-600 text-xl">⚠️</span>
-                <p id="error-message" class="text-red-800"></p>
+        <!-- System Messages & Loading -->
+        <div id="loading" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
+            <div class="inline-flex items-center justify-center p-4 bg-blue-50 rounded-full mb-6">
+                <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-900 mb-2">Veriler İşleniyor</h3>
+            <p id="loading-status" class="text-slate-500">Lütfen bekleyiniz, analiz gerçekleştiriliyor...</p>
+            <div class="mt-8 bg-slate-100 rounded-full h-1.5 max-w-lg mx-auto overflow-hidden">
+                <div id="progress-bar" class="bg-blue-600 h-1.5 rounded-full transition-all duration-500" style="width: 0%"></div>
             </div>
         </div>
 
-        <!-- Results -->
+        <!-- Error Panel -->
+        <div id="error-box" class="hidden bg-red-50 border border-red-200 rounded-xl p-6 mb-8">
+            <div class="flex gap-4">
+                <div class="text-red-500 flex-shrink-0">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <div>
+                    <h3 class="font-medium text-red-900">İşlem Başarısız</h3>
+                    <p id="error-message" class="text-red-700 mt-1 text-sm"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
         <div id="results" class="hidden">
-            <!-- Summary Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div class="bg-white rounded-lg shadow p-4">
-                    <p class="text-gray-600 text-sm">Toplam Şikayet</p>
-                    <p class="text-2xl font-bold text-gray-800" id="total-count">0</p>
+            <!-- Action Toolbar -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6">
+                <!-- Filtering Params -->
+                <div class="flex gap-4 mb-4 border-b border-slate-100 pb-4">
+                    <div class="flex-1">
+                        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Kurum ile Filtrele</label>
+                        <input type="text" id="filter-company" onkeyup="filterResults()" placeholder="Kurum adı..." class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-1 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Tarih ile Filtrele</label>
+                        <input type="text" id="filter-date" onkeyup="filterResults()" placeholder="Örn: Eylül, 2024..." class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-1 focus:ring-blue-500 outline-none">
+                    </div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <p class="text-gray-600 text-sm">Çözülen</p>
-                    <p class="text-2xl font-bold text-green-600" id="resolved-count">0</p>
-                </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <p class="text-gray-600 text-sm">Cevaplanan</p>
-                    <p class="text-2xl font-bold text-yellow-600" id="answered-count">0</p>
-                </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <p class="text-gray-600 text-sm">Bekleyen</p>
-                    <p class="text-2xl font-bold text-red-600" id="pending-count">0</p>
+
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <h3 class="font-semibold text-slate-800 ml-2">Analiz Sonuçları</h3>
+                        <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-sm font-medium border border-slate-200">
+                            <span id="total-count">0</span> Kayıt
+                        </span>
+                    </div>
+                <div class="flex gap-3">
+                    <button onclick="analyzeWithAI()" id="ai-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        ✨ AI Analiz
+                    </button>
+                    <button onclick="exportToExcel()" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+                        <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Excel Raporu
+                    </button>
+                    <button onclick="exportToJSON()" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        JSON
+                    </button>
+                    <button onclick="exportToCSV()" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+                        <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        CSV
+                    </button>
                 </div>
             </div>
 
-            <!-- Export Buttons -->
-            <div class="bg-white rounded-lg shadow-lg p-4 mb-6">
-                <div class="flex gap-4 flex-wrap">
-                    <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
-                        Excel İndir
-                    </button>
-                    <button onclick="exportToJSON()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
-                        JSON İndir
-                    </button>
-                    <button onclick="exportToCSV()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
-                        CSV İndir
-                    </button>
-                    
-                </div>
-            </div>
-
-            <!-- Results Table -->
-            <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+            <!-- Data Table -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full">
-                        <thead class="bg-gray-50 border-b">
+                        <thead class="bg-slate-50 border-b border-slate-200">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Başlık</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Şirket</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durum</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Upvote</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tarih</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detay</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-12">#</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Şikayet Başlığı</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">İlgili Kurum</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tarih</th>
+                                <th class="px-6 py-4 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">İşlemler</th>
                             </tr>
                         </thead>
-                        <tbody id="results-table" class="bg-white divide-y divide-gray-200">
+                        <tbody id="results-table" class="bg-white divide-y divide-slate-100">
                             <!-- Results will be inserted here -->
                         </tbody>
                     </table>
@@ -149,75 +196,104 @@
         </div>
     </div>
 
+    <!-- AI Modal -->
+    <div id="ai-modal" class="fixed inset-0 bg-slate-900/50 hidden items-center justify-center z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[85vh] flex flex-col">
+            <div class="flex items-center justify-between p-6 border-b border-slate-100">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-indigo-50 rounded-lg">
+                        <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-slate-900">YZ Analiz Raporu</h3>
+                    </div>
+                </div>
+                <button onclick="closeAIModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <div class="p-8 overflow-y-auto flex-1 prose prose-slate max-w-none" id="ai-content">
+                <!-- Content will be injected here -->
+            </div>
+
+            <div class="p-6 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-between">
+                <button onclick="downloadAIReport()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    PDF Oluştur
+                </button>
+                <button onclick="closeAIModal()" class="bg-white border border-slate-300 text-slate-700 px-6 py-2.5 rounded-lg font-medium hover:bg-slate-50 transition-colors">
+                    Kapat
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_BASE_URL = window.location.origin;
         
         let allComplaints = [];
+        let filteredComplaints = [];
         let currentKeyword = '';
+        let lastAnalysisDataHash = '';
+        let lastAnalysisResult = '';
 
-        // API bağlantısını kontrol et
+        // API Status Check
         async function checkAPI() {
             try {
                 const response = await fetch(`${API_BASE_URL}/api/health`, {
                     method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
+                    headers: { 'Content-Type': 'application/json' }
                 });
                 
                 if (response.ok) {
                     const data = await response.json();
-                    document.getElementById('api-status').textContent = '✅ Çalışıyor';
-                    document.getElementById('api-status').className = 'text-green-600 font-semibold';
+                    document.getElementById('api-status-text').textContent = 'Sistem Aktif';
+                    document.getElementById('api-status-text').className = 'text-sm font-medium text-emerald-700';
+                    document.getElementById('api-status-dot').className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
                     document.getElementById('api-warning').classList.add('hidden');
-                    console.log('API Status:', data);
                 } else {
                     throw new Error('API yanıt vermiyor');
                 }
             } catch (error) {
                 console.error('API kontrol hatası:', error);
-                document.getElementById('api-status').textContent = '❌ Çalışmıyor';
-                document.getElementById('api-status').className = 'text-red-600 font-semibold';
-                
-                // Eğer localhost değilse farklı uyarı göster
-                if (!window.location.hostname.includes('localhost')) {
-                    document.getElementById('api-warning').querySelector('p').textContent = 'Backend servisi yanıt vermiyor.';
-                    document.getElementById('api-warning').querySelector('pre').classList.add('hidden');
-                }
+                document.getElementById('api-status-text').textContent = 'Bağlantı Hatası';
+                document.getElementById('api-status-text').className = 'text-sm font-medium text-red-700';
+                document.getElementById('api-status-dot').className = 'w-2.5 h-2.5 rounded-full bg-red-500';
                 document.getElementById('api-warning').classList.remove('hidden');
             }
         }
 
-        // Şikayetleri ara
+        // Search Function
         async function searchComplaints() {
             const keyword = document.getElementById('keyword-input').value.trim();
-            const searchType = document.querySelector('input[name="search-type"]:checked').value;
+            const searchType = 'company'; // Default and only option now
             
             if (!keyword) {
-                alert('Lütfen bir arama kelimesi girin!');
+                // Professional inline notification could be better, but native alert for now
+                alert('Lütfen arama yapmak için bir parametre giriniz.');
                 return;
             }
 
             currentKeyword = keyword;
 
-            // UI güncelle
+            // UI Update
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('results').classList.add('hidden');
             document.getElementById('error-box').classList.add('hidden');
             document.getElementById('search-btn').disabled = true;
+            document.getElementById('search-btn').classList.add('opacity-75', 'cursor-not-allowed');
 
-            // Progress bar animasyonu
             let progress = 0;
             const progressInterval = setInterval(() => {
-                progress = Math.min(progress + Math.random() * 15, 90);
+                progress = Math.min(progress + Math.random() * 10, 95);
                 document.getElementById('progress-bar').style.width = progress + '%';
-            }, 500);
+            }, 600);
 
             try {
                 const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(keyword)}&type=${searchType}&all=true`;
-                console.log('Fetching:', url);
                 
-                document.getElementById('loading-status').textContent = 'Veriler çekiliyor...';
+                document.getElementById('loading-status').textContent = 'Veri tabanı taranıyor ve analiz ediliyor...';
                 
                 const response = await fetch(url, {
                     method: 'GET',
@@ -225,13 +301,10 @@
                         'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     },
-                    // CORS için credentials ekle
                     credentials: 'same-origin'
                 });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
                 const data = await response.json();
                 
@@ -240,16 +313,21 @@
 
                 if (data.success && data.data) {
                     allComplaints = data.data;
-                    displayResults(data.data);
-                    document.getElementById('loading-status').textContent = `${data.data.length} şikayet başarıyla yüklendi!`;
+                    filteredComplaints = data.data; // Initial sync
                     
-                    // 1 saniye sonra loading'i gizle
+                    // Reset filters
+                    document.getElementById('filter-company').value = '';
+                    document.getElementById('filter-date').value = '';
+                    
+                    displayResults(filteredComplaints);
+                    document.getElementById('loading-status').textContent = `${data.data.length} kayıt başarıyla analiz edildi.`;
+                    
                     setTimeout(() => {
                         document.getElementById('loading').classList.add('hidden');
                         document.getElementById('results').classList.remove('hidden');
-                    }, 1000);
+                    }, 800);
                 } else {
-                    throw new Error(data.error || 'Veri çekme başarısız');
+                    throw new Error(data.error || 'Veri çekme işlemi başarısız oldu.');
                 }
             } catch (error) {
                 clearInterval(progressInterval);
@@ -259,65 +337,62 @@
                 document.getElementById('error-box').classList.remove('hidden');
                 document.getElementById('error-message').textContent = 
                     error.message.includes('Failed to fetch') 
-                        ? 'Backend API\'ye bağlanılamıyor.'
-                        : `Hata: ${error.message}`;
+                        ? 'Veri kaynağına erişim sağlanamadı. Lütfen internet bağlantınızı kontrol ediniz.'
+                        : `Sistem Hatası: ${error.message}`;
             } finally {
                 document.getElementById('search-btn').disabled = false;
-                document.getElementById('progress-bar').style.width = '0%';
+                document.getElementById('search-btn').classList.remove('opacity-75', 'cursor-not-allowed');
+                setTimeout(() => {
+                    document.getElementById('progress-bar').style.width = '0%';
+                }, 1000);
             }
         }
 
-        // Sonuçları göster
-        function displayResults(complaints) {
-            // İstatistikleri güncelle
-            document.getElementById('total-count').textContent = complaints.length;
-            
-            let resolved = 0, answered = 0, pending = 0;
-            complaints.forEach(c => {
-                if (c.status === 'Çözüldü') resolved++;
-                else if (c.status === 'Cevaplandı') answered++;
-                else pending++;
-            });
-            
-            document.getElementById('resolved-count').textContent = resolved;
-            document.getElementById('answered-count').textContent = answered;
-            document.getElementById('pending-count').textContent = pending;
+        // Filter Logic
+        function filterResults() {
+            const companyTerm = document.getElementById('filter-company').value.toLowerCase();
+            const dateTerm = document.getElementById('filter-date').value.toLowerCase();
 
-            // Tabloyu doldur
+            filteredComplaints = allComplaints.filter(item => {
+                const companyMatch = (item.company || '').toLowerCase().includes(companyTerm);
+                const dateMatch = (item.date || '').toLowerCase().includes(dateTerm);
+                return companyMatch && dateMatch;
+            });
+
+            displayResults(filteredComplaints);
+        }
+
+        // Display Results
+        function displayResults(complaints) {
+            document.getElementById('total-count').textContent = complaints.length;
             const tableBody = document.getElementById('results-table');
             tableBody.innerHTML = '';
 
             complaints.forEach((complaint, index) => {
                 const row = document.createElement('tr');
-                row.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                row.className = 'hover:bg-slate-50 transition-colors group';
                 
-                // Status badge rengi
                 let statusBadge = '';
-                if (complaint.status === 'Çözüldü') {
-                    statusBadge = 'bg-green-100 text-green-800';
-                } else if (complaint.status === 'Cevaplandı') {
-                    statusBadge = 'bg-yellow-100 text-yellow-800';
+                const s = (complaint.status || '').toLowerCase();
+                if (s.includes('çözüldü')) {
+                    statusBadge = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+                } else if (s.includes('cevap') || s.includes('yanıt')) {
+                    statusBadge = 'bg-amber-100 text-amber-800 border border-amber-200';
                 } else {
-                    statusBadge = 'bg-red-100 text-red-800';
+                    statusBadge = 'bg-slate-100 text-slate-600 border border-slate-200';
                 }
 
                 row.innerHTML = `
-                    <td class="px-4 py-3 text-sm">${index + 1}</td>
-                    <td class="px-4 py-3">
-                        <div class="text-sm font-medium text-gray-900 line-clamp-2">${complaint.title || 'Başlık yok'}</div>
+                    <td class="px-6 py-4 text-sm text-slate-400 font-mono">${index + 1}</td>
+                    <td class="px-6 py-4">
+                        <div class="text-sm font-semibold text-slate-900 line-clamp-1 group-hover:text-blue-700 transition-colors">${complaint.title || 'Başlık Belirtilmemiş'}</div>
                     </td>
-                    <td class="px-4 py-3 text-sm text-gray-600">${complaint.company || 'Bilinmiyor'}</td>
-                    <td class="px-4 py-3">
-                        <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusBadge}">
-                            ${complaint.status || 'Beklemede'}
-                        </span>
-                    </td>
-                    <td class="px-4 py-3 text-sm text-gray-600">${complaint.upvotes || 0}</td>
-                    <td class="px-4 py-3 text-sm text-gray-600">${complaint.date || '-'}</td>
-                    <td class="px-4 py-3 text-sm">
-                        <button onclick="showDetail(${index})" class="text-blue-600 hover:text-blue-900">
-                            Detay
-                        </button>
+                    <td class="px-6 py-4 text-sm text-slate-600 font-medium">${complaint.company || 'Belirsiz'}</td>
+                    <td class="px-6 py-4 text-sm text-slate-500 whitespace-nowrap">${complaint.date || '-'}</td>
+                    <td class="px-6 py-4 text-right">
+                        <a href="${complaint.link || '#'}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-900 text-sm font-medium hover:underline">
+                            İncele
+                        </a>
                     </td>
                 `;
                 
@@ -325,82 +400,47 @@
             });
         }
 
-        // Detay göster
-        function showDetail(index) {
-            const complaint = allComplaints[index];
-            const content = complaint.content || 'İçerik yok';
-            const link = complaint.link || '#';
-            
-            alert(`Başlık: ${complaint.title}\n\nİçerik: ${content.substring(0, 500)}...\n\nLink: ${link}`);
-        }
-
-        // Excel'e export
         async function exportToExcel() {
-            if (allComplaints.length === 0) {
-                alert('Export edilecek veri yok!');
-                return;
-            }
-
+            if (filteredComplaints.length === 0) return alert('Dışa aktarılacak veri bulunmamaktadır.');
             try {
                 const response = await fetch(`${API_BASE_URL}/api/export/excel`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        complaints: allComplaints,
-                        keyword: currentKeyword
-                    }),
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ complaints: filteredComplaints, keyword: currentKeyword }),
                     credentials: 'same-origin'
                 });
 
-                if (!response.ok) throw new Error('Excel export başarısız');
+                if (!response.ok) throw new Error('Excel oluşturulamadı');
 
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `sikayetvar_${currentKeyword}_${new Date().toISOString().split('T')[0]}.xlsx`;
+                a.download = `Rapor_${currentKeyword}_${new Date().toISOString().slice(0,10)}.xlsx`;
                 document.body.appendChild(a);
                 a.click();
                 window.URL.revokeObjectURL(url);
                 document.body.removeChild(a);
             } catch (error) {
-                console.error('Excel export hatası:', error);
-                alert('Excel export başarısız: ' + error.message);
+                console.error('Export Error:', error);
+                alert('Excel raporu oluşturulurken bir hata oluştu: ' + error.message);
             }
         }
 
-        // JSON export
         function exportToJSON() {
-            if (allComplaints.length === 0) {
-                alert('Export edilecek veri yok!');
-                return;
-            }
-
-            const dataStr = JSON.stringify(allComplaints, null, 2);
+            if (filteredComplaints.length === 0) return alert('Veri yok.');
+            const dataStr = JSON.stringify(filteredComplaints, null, 2);
             const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-            
-            const exportFileDefaultName = `sikayetvar_${currentKeyword}_${new Date().toISOString().split('T')[0]}.json`;
-            
-            const linkElement = document.createElement('a');
-            linkElement.setAttribute('href', dataUri);
-            linkElement.setAttribute('download', exportFileDefaultName);
-            linkElement.click();
+            const link = document.createElement('a');
+            link.href = dataUri;
+            link.download = `Analiz_${currentKeyword}.json`;
+            link.click();
         }
 
-        // CSV export
         function exportToCSV() {
-            if (allComplaints.length === 0) {
-                alert('Export edilecek veri yok!');
-                return;
-            }
-
-            // CSV başlıkları
-            const headers = ['ID', 'Başlık', 'Şirket', 'Durum', 'Upvote', 'Tarih', 'İçerik', 'Link'];
-            
-            // CSV satırları
-            const rows = allComplaints.map((c, i) => [
+            if (filteredComplaints.length === 0) return alert('Veri yok.');
+            const headers = ['ID', 'Başlık', 'Kurum', 'Durum', 'Destekleme', 'Tarih', 'İçerik', 'URL'];
+            const rows = filteredComplaints.map((c, i) => [
                 i + 1,
                 `"${(c.title || '').replace(/"/g, '""')}"`,
                 `"${(c.company || '').replace(/"/g, '""')}"`,
@@ -410,34 +450,109 @@
                 `"${(c.content || '').replace(/"/g, '""').substring(0, 500)}"`,
                 c.link || ''
             ]);
-
-            // CSV string oluştur
-            let csvContent = '\uFEFF'; // UTF-8 BOM for Excel
-            csvContent += headers.join(',') + '\n';
-            csvContent += rows.map(e => e.join(',')).join('\n');
-
-            // İndir
+            let csvContent = '\uFEFF' + headers.join(',') + '\n' + rows.map(e => e.join(',')).join('\n');
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `sikayetvar_${currentKeyword}_${new Date().toISOString().split('T')[0]}.csv`;
+            link.download = `Analiz_${currentKeyword}.csv`;
             link.click();
             URL.revokeObjectURL(url);
         }
 
-        
+        // AI Functions
+        async function analyzeWithAI() {
+            if (filteredComplaints.length === 0) return alert('Analiz edilecek veri bulunamadı.');
+            
+            const btn = document.getElementById('ai-btn');
+            const modal = document.getElementById('ai-modal');
+            const content = document.getElementById('ai-content');
 
-        // Sayfa yüklendiğinde API'yi kontrol et
+            // Caching Check
+            const currentDataHash = JSON.stringify(filteredComplaints);
+            if (currentDataHash === lastAnalysisDataHash && lastAnalysisResult) {
+                console.log('Using cached AI result');
+                content.innerHTML = lastAnalysisResult;
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                return;
+            }
+            
+            // Loading State
+            btn.disabled = true;
+            btn.innerHTML = '<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Analiz Ediliyor...';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ complaints: filteredComplaints }),
+                    credentials: 'same-origin'
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) throw new Error(data.error || 'Analiz başarısız');
+
+                // Format Markdown to HTML (Simple converter)
+                let formattedHtml = data.analysis
+                    .replace(/^### (.*$)/gim, '<h3 class="text-lg font-bold mt-4 mb-2 text-indigo-900">$1</h3>')
+                    .replace(/^## (.*$)/gim, '<h2 class="text-xl font-bold mt-6 mb-3 text-slate-800 border-b pb-2 html2pdf__page-break">$1</h2>')
+                    .replace(/^\* (.*$)/gim, '<li class="ml-4 list-disc text-slate-700 mb-1">$1</li>')
+                    .replace(/\*\*(.*)\*\*/gim, '<strong class="font-semibold text-slate-900">$1</strong>')
+                    .replace(/\n/gim, '<br>');
+
+                // Save to cache
+                lastAnalysisDataHash = currentDataHash;
+                lastAnalysisResult = formattedHtml;
+
+                content.innerHTML = formattedHtml;
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                
+            } catch (error) {
+                console.error('AI Error:', error);
+                alert('Yapay zeka analizi oluşturulamadı: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> ✨ AI Analiz';
+            }
+        }
+
+        function closeAIModal() {
+            const modal = document.getElementById('ai-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function downloadAIReport() {
+            const content = document.getElementById('ai-content').innerHTML;
+            const printArea = document.getElementById('print-area');
+            
+            // Format for printing
+            printArea.innerHTML = `
+                <div style="font-family: 'Inter', sans-serif; max-width: 800px; margin: 0 auto;">
+                    <h1 style="font-size: 24px; font-weight: bold; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px;">
+                        Analiz Raporu: ${currentKeyword}
+                    </h1>
+                    <div style="font-size: 14px; color: #666; margin-bottom: 30px;">
+                        Oluşturulma Tarihi: ${new Date().toLocaleDateString('tr-TR')}
+                    </div>
+                    <div class="prose prose-slate max-w-none">
+                        ${content}
+                    </div>
+                </div>
+            `;
+            
+            // Show print area, trigger print, then hide
+            printArea.classList.remove('hidden');
+            window.print();
+            printArea.classList.add('hidden');
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
             checkAPI();
-            
-            // Her 30 saniyede bir API durumunu kontrol et
             setInterval(checkAPI, 30000);
-        });
-
-        // Enter tuşu ile arama
-        document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('keyword-input').focus();
         });
     </script>
