@@ -73,8 +73,14 @@
             </div>
         </div>
 
-        <!-- Search Section -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8 mb-8">
+        <!-- Main Tabs -->
+        <div class="flex gap-4 mb-6 border-b border-slate-200">
+            <button onclick="switchTab('complaints')" id="tab-complaints" class="px-4 py-2 text-sm font-medium text-blue-600 border-b-2 border-blue-600 focus:outline-none">Şikayet Analizi</button>
+            <button onclick="switchTab('partners')" id="tab-partners" class="px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 focus:outline-none">İş Ortakları</button>
+        </div>
+
+        <!-- Search Section (Complaints) -->
+        <div id="section-complaints" class="bg-white rounded-xl shadow-sm border border-slate-200 p-8 mb-8">
             <div class="flex gap-4 mb-6">
                 <div class="flex-1">
                     <label class="block text-sm font-medium text-slate-700 mb-2">Analiz Parametresi</label>
@@ -99,7 +105,65 @@
                     </button>
                 </div>
             </div>
+        </div>
 
+        <!-- Partners Section -->
+        <div id="section-partners" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-8 mb-8">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-900">Logo İş Ortakları</h2>
+                    <p class="text-slate-500 text-sm mt-1">Logo Yazılım resmi iş ortaklarını listeleyin ve iletişim bilgilerine ulaşın.</p>
+                </div>
+                <div class="flex gap-3">
+                    <button 
+                        onclick="exportPartnersToExcel()"
+                        id="partners-export-btn"
+                        class="hidden bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+                    >
+                        <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Excel'e Aktar
+                    </button>
+                    <button 
+                        onclick="fetchPartners()"
+                        id="partners-btn"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                        Verileri Getir / Güncelle
+                    </button>
+                </div>
+            </div>
+
+            <!-- Partners Loading -->
+            <div id="partners-loading" class="hidden p-12 text-center">
+                <svg class="animate-spin h-8 w-8 text-indigo-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p class="text-slate-500">İş ortakları verileri çekiliyor, bu işlem birkaç saniye sürebilir...</p>
+            </div>
+
+            <!-- Partners Table -->
+            <div id="partners-results" class="hidden overflow-hidden rounded-lg border border-slate-200">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-indigo-50 border-b border-indigo-100">
+                            <tr>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-indigo-800 uppercase tracking-wider">Firma Adı</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-indigo-800 uppercase tracking-wider">Lokasyon</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-indigo-800 uppercase tracking-wider">Telefon</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-indigo-800 uppercase tracking-wider">E-posta</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-indigo-800 uppercase tracking-wider">Web Sitesi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="partners-table-body" class="bg-white divide-y divide-slate-100">
+                            <!-- Rows -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="bg-slate-50 px-6 py-3 border-t border-slate-200 text-sm text-slate-500">
+                    Toplam <span id="partners-count" class="font-bold text-slate-700">0</span> iş ortağı listelendi.
+                </div>
             </div>
         </div>
 
@@ -234,6 +298,7 @@
         
         let allComplaints = [];
         let filteredComplaints = [];
+        let partnersData = []; // Store partners data
         let currentKeyword = '';
         let lastAnalysisDataHash = '';
         let lastAnalysisResult = '';
@@ -532,12 +597,17 @@
             // Format for printing
             printArea.innerHTML = `
                 <div style="font-family: 'Inter', sans-serif; max-width: 800px; margin: 0 auto;">
-                    <h1 style="font-size: 24px; font-weight: bold; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px;">
-                        Analiz Raporu: ${currentKeyword}
+                    <h1 style="font-size: 24px; font-weight: bold; margin-bottom: 5px; color: #1e293b;">
+                        Kurumsal Şikayet Analiz ve B2B Veri Platformu
                     </h1>
-                    <div style="font-size: 14px; color: #666; margin-bottom: 30px;">
-                        Oluşturulma Tarihi: ${new Date().toLocaleDateString('tr-TR')}
+                     <h2 style="font-size: 16px; color: #64748b; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px;">
+                        Pazar Analizi ve Müşteri Geri Bildirim Sistemi
+                    </h2>
+                    <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #e2e8f0;">
+                        <div style="font-size: 14px; color: #475569; font-weight: 600;">Analiz Konusu: <span style="color: #0f172a;">${currentKeyword}</span></div>
+                        <div style="font-size: 14px; color: #64748b; margin-top: 5px;">Oluşturulma Tarihi: ${new Date().toLocaleDateString('tr-TR')}</div>
                     </div>
+                    <div class="prose prose-slate max-w-none">
                     <div class="prose prose-slate max-w-none">
                         ${content}
                     </div>
@@ -548,6 +618,130 @@
             printArea.classList.remove('hidden');
             window.print();
             printArea.classList.add('hidden');
+        }
+
+        // Tab Logic
+        function switchTab(tab) {
+            const btnComplaints = document.getElementById('tab-complaints');
+            const btnPartners = document.getElementById('tab-partners');
+            const secComplaints = document.getElementById('section-complaints');
+            const secPartners = document.getElementById('section-partners');
+            const results = document.getElementById('results');
+
+            if (tab === 'complaints') {
+                btnComplaints.className = 'px-4 py-2 text-sm font-medium text-blue-600 border-b-2 border-blue-600 focus:outline-none';
+                btnPartners.className = 'px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 focus:outline-none';
+                secComplaints.classList.remove('hidden');
+                secPartners.classList.add('hidden');
+                if (allComplaints.length > 0) results.classList.remove('hidden');
+            } else {
+                btnPartners.className = 'px-4 py-2 text-sm font-medium text-indigo-600 border-b-2 border-indigo-600 focus:outline-none';
+                btnComplaints.className = 'px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 focus:outline-none';
+                secPartners.classList.remove('hidden');
+                secComplaints.classList.add('hidden');
+                results.classList.add('hidden');
+            }
+        }
+
+        // Partner Scraping Logic
+        async function fetchPartners() {
+            const btn = document.getElementById('partners-btn');
+            const loading = document.getElementById('partners-loading');
+            const results = document.getElementById('partners-results');
+            const tableBody = document.getElementById('partners-table-body');
+            const countSpan = document.getElementById('partners-count');
+
+            // Reset UI
+            btn.disabled = true;
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+            loading.classList.remove('hidden');
+            results.classList.add('hidden');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/partners`);
+                if (!response.ok) throw new Error('Veri çekilemedi.');
+                
+                const partners = await response.json();
+                
+                if (partners.error) throw new Error(partners.error);
+
+                partnersData = partners; // Save to state
+                document.getElementById('partners-export-btn').classList.remove('hidden'); // Show export button
+
+                // Populate Table
+                tableBody.innerHTML = '';
+                partners.forEach(partner => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-slate-50 transition-colors';
+                    row.innerHTML = `
+                        <td class="px-6 py-4">
+                            <div class="text-sm font-semibold text-slate-900">${partner.name}</div>
+                            <div class="text-xs text-slate-500">${partner.channel || ''}</div>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-slate-600">
+                             ${partner.location || '-'}
+                        </td>
+                         <td class="px-6 py-4 text-sm text-slate-600 font-mono">
+                             ${partner.phone || '-'}
+                        </td>
+                        <td class="px-6 py-4 text-sm text-slate-600 font-mono">
+                             ${partner.email ? `<a href="mailto:${partner.email}" class="text-blue-600 hover:underline">${partner.email}</a>` : '-'}
+                        </td>
+                         <td class="px-6 py-4 text-sm text-slate-600">
+                             ${partner.web_address ? `<a href="http://${partner.web_address}" target="_blank" class="text-blue-600 hover:underline">Web Sitesi</a>` : '-'}
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+
+                countSpan.textContent = partners.length;
+                loading.classList.add('hidden');
+                results.classList.remove('hidden');
+
+            } catch (error) {
+                console.error(error);
+                alert('İş ortakları getirilemedi: ' + error.message);
+                loading.classList.add('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+        }
+
+        async function exportPartnersToExcel() {
+            if (partnersData.length === 0) return alert('Dışa aktarılacak veri bulunmamaktadır.');
+            
+            const btn = document.getElementById('partners-export-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Hazırlanıyor...`;
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/partners/export/excel`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ partners: partnersData }),
+                    credentials: 'same-origin'
+                });
+
+                if (!response.ok) throw new Error('Excel oluşturulamadı');
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Logo_Is_Ortaklari_${new Date().toISOString().slice(0,10)}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (error) {
+                console.error('Export Error:', error);
+                alert('Excel raporu oluşturulurken bir hata oluştu: ' + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
         }
 
         window.addEventListener('DOMContentLoaded', () => {

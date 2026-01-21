@@ -1,4 +1,3 @@
-
 from flask import Flask, request, jsonify, send_file, render_template_string
 from flask_cors import CORS
 import requests
@@ -6,12 +5,16 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 import time
 import io
+import openpyxl # Added
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 import os
 import json
 import logging
+import re # Added
+import google.generativeai as genai # Added
+from scraper import scrape_partners # Added
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO)
@@ -472,8 +475,10 @@ def export_excel():
         ws.freeze_panes = 'A2'
         
         summary_ws = wb.create_sheet(title="Özet")
-        summary_ws['A1'] = 'Şikayetvar Rapor Özeti'
+        summary_ws['A1'] = 'Kurumsal Şikayet Analiz Platformu'
+        summary_ws['A2'] = 'Pazar Analizi ve Müşteri Geri Bildirim Sistemi'
         summary_ws['A1'].font = Font(bold=True, size=16)
+        summary_ws['A2'].font = Font(size=12, italic=True, color="666666")
         
         summary_data = [
             ['Arama Kelimesi:', keyword],
@@ -521,8 +526,6 @@ def export_excel():
         return jsonify({'error': 'Sunucu hatası'}), 500
 
 # AI Configuration
-import google.generativeai as genai
-import os
 
 # Manual .env loader (Basit .env okuyucu)
 try:
@@ -537,6 +540,7 @@ try:
         print(" .env dosyası başarıyla yüklendi.")
 except Exception as e:
     print(f" .env yüklenirken hata: {e}")
+
 
 
 @app.route('/api/analyze', methods=['POST'])
@@ -654,6 +658,121 @@ def not_found(e):
 @app.errorhandler(500)
 def server_error(e):
     return jsonify({'error': 'Sunucu hatası'}), 500
+
+@app.route('/api/partners', methods=['GET'])
+def get_partners():
+    """
+    Endpoint to trigger partner scraping and return the data.
+    """
+    try:
+        partners = scrape_partners()
+        return jsonify(partners)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/partners/export/excel', methods=['POST'])
+def export_partners_excel():
+    """İş Ortaklarını Excel formatında indir"""
+    try:
+        data = request.json
+        partners = data.get('partners', [])
+        
+        if not partners:
+            return jsonify({'error': 'Dışa aktarılacak veri bulunamadı'}), 400
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "İş Ortakları"
+        
+        # Title Rows
+        ws['A1'] = 'Kurumsal Şikayet Analiz Platformu'
+        ws['A1'].font = Font(bold=True, size=16)
+        ws['A1'].alignment = Alignment(horizontal='center') 
+        ws.merge_cells('A1:F1')
+        
+        ws['A2'] = 'Pazar Analizi ve Müşteri Geri Bildirim Sistemi'
+        ws['A2'].font = Font(size=12, italic=True, color="666666")
+        ws['A2'].alignment = Alignment(horizontal='center')
+        ws.merge_cells('A2:F2')
+        
+        ws['A3'] = f'Rapor Tarihi: {datetime.now().strftime("%d.%m.%Y %H:%M")}'
+        ws['A3'].alignment = Alignment(horizontal='center')
+        ws.merge_cells('A3:F3')
+
+        # Headers
+        headers = ['#', 'Firma Adı', 'Şehir / İlçe', 'Telefon', 'E-posta', 'Web Sitesi']
+        header_fill = PatternFill(start_color="4F46E5", end_color="4F46E5", fill_type="solid") # Indigo color
+        header_font = Font(bold=True, color="FFFFFF", size=12)
+        
+        start_row = 5 # Data starts after titles
+        
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=start_row, column=col_num, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        # Data
+        thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+        
+        for row_num, p in enumerate(partners, start_row + 1):
+            # ID
+            ws.cell(row=row_num, column=1, value=row_num-start_row).alignment = Alignment(horizontal='center')
+            
+            # Name
+            name_cell = ws.cell(row=row_num, column=2, value=p.get('name', ''))
+            name_cell.font = Font(bold=True)
+            
+            # Location
+            ws.cell(row=row_num, column=3, value=p.get('location', ''))
+            
+            # Phone
+            ws.cell(row=row_num, column=4, value=p.get('phone', ''))
+            
+            # Email
+            email = p.get('email')
+            email_cell = ws.cell(row=row_num, column=5, value=email if email else '')
+            if email and '@' in email:
+                 email_cell.hyperlink = f"mailto:{email}"
+                 email_cell.font = Font(color="0563C1", underline="single")
+            
+            # Web
+            web = p.get('web_address')
+            web_cell = ws.cell(row=row_num, column=6, value=web if web else '')
+            if web:
+                if not web.startswith('http'): web = 'http://' + web
+                web_cell.hyperlink = web
+                web_cell.font = Font(color="0563C1", underline="single")
+                
+            # Borders
+            for col in range(1, 7):
+                ws.cell(row=row_num, column=col).border = thin_border
+
+        # Column Widths
+        ws.column_dimensions['A'].width = 5
+        ws.column_dimensions['B'].width = 40
+        ws.column_dimensions['C'].width = 25
+        ws.column_dimensions['D'].width = 15
+        ws.column_dimensions['E'].width = 30
+        ws.column_dimensions['F'].width = 30
+        
+        ws.freeze_panes = 'A2'
+        
+        excel_file = io.BytesIO()
+        wb.save(excel_file)
+        excel_file.seek(0)
+        
+        filename = f'logo_is_ortaklari_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        
+        return send_file(
+            excel_file,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        print(f"Partner Excel export hatası: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     # Port ayarı - environment variable veya default
